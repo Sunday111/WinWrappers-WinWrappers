@@ -6,7 +6,8 @@
 
 #include <Windows.h>
 #include <CommCtrl.h>
-
+#include <cassert>
+#include <memory>
 
 template<typename TChar>
 using WndClass = std::conditional_t<
@@ -43,6 +44,7 @@ MakeFnWrapper(GetWindowLongPtr)
 MakeFnWrapper(LoadIcon)
 MakeFnWrapper(MessageBox)
 MakeFnWrapper(MessageBoxEx)
+MakeFnWrapper(PeekMessage)
 MakeFnWrapper(RegisterClass)
 MakeFnWrapper(RegisterClassEx)
 MakeFnWrapper(SetWindowLongPtr)
@@ -323,6 +325,10 @@ public:
 		return WrappedFn(MessageBoxEx)(hWnd, lpText, lpCaption, uType, wLanguageId);
 	}
 
+    static bool PeekMessage_(MSG* lpMsg, HWND hWnd, unsigned wMsgFilterMin, unsigned wMsgFilterMax, unsigned wRemoveMsg) {
+        return WrappedFn(PeekMessage)(lpMsg, hWnd, wMsgFilterMin, wMsgFilterMax, wRemoveMsg);
+    }
+
 	static uint16_t RegisterClass_(const WndClass* pClass) {
 		return WrappedFn(RegisterClass)(pClass);
 	}
@@ -339,30 +345,44 @@ public:
 		return WrappedFn(UnregisterClass)(className, hInstance);
 	}
 
+    static std::basic_string<TChar> DescribeErrorCode(uint32_t errorMessageID) {
+        TChar* messageBuffer = nullptr;
+        auto size = FormatMessage_(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            0, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (TChar*)&messageBuffer, 0, nullptr);
+
+        std::basic_string<TChar> message(messageBuffer, size);
+
+        //Free the buffer.
+        LocalFree(messageBuffer);
+
+        return message;
+    }
+
 	template<typename F>
-	static bool HandleLastError(F&& onError)
-	{
-		//Get the error message, if any.
-		uint32_t errorMessageID = ::GetLastError();
-
-		//No error message has been recorded
-		if (errorMessageID == 0)
-			return false;
-
-		TChar* messageBuffer = nullptr;
-		auto size = FormatMessage_(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-			0, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (TChar*)&messageBuffer, 0, nullptr);
-
-		std::string message(messageBuffer, size);
-
-		//Free the buffer.
-		LocalFree(messageBuffer);
-
-		onError(std::move(message));
-
-		return true;
+	static bool HandleLastError(F&& onError) {
+        return HandleError(::GetLastError(), std::forward<F>(onError));
 	}
+
+    static bool IsError(uint32_t errorMessageID) {
+        return errorMessageID != 0;
+    }
+
+    template<typename F>
+    static bool HandleError(uint32_t errorMessageID, F&& onError) {
+        if (!IsError(errorMessageID)) {
+            return false;
+        }
+        auto message = DescribeErrorCode(errorMessageID);
+        onError(std::move(message));
+        return true;
+    }
+
+    static void ThrowIfError(uint32_t errorMessageID) {
+        HandleError(errorMessageID, [&](std::basic_string<TChar>&& message) {
+            throw std::runtime_error(std::move(message));
+        });
+    }
 
 	static void ThrowLastError() {
 		HandleLastError([](std::string&& str) {
@@ -402,7 +422,7 @@ class WindowClass {
 public:
 	using WA = WinAPI<TChar>;
 
-	WindowClass(HINSTANCE module_) :
+	WindowClass(HINSTANCE module_, HBRUSH backgroundBrush = (HBRUSH)(COLOR_WINDOW + 1)) :
 		m_module(module_) {
 		CallAndRethrow("WindowClass::WindowClass(HINSTANCE) ", [&]() {
 			typename WA::WndClassEx wndClass;
@@ -414,11 +434,10 @@ public:
 			wndClass.hInstance = m_module;
 			wndClass.hIcon = WA::LoadIcon_(m_module, IDI_APPLICATION);
 			wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-			wndClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+			wndClass.hbrBackground = backgroundBrush;
 			wndClass.lpszMenuName = NULL;
 			wndClass.lpszClassName = CastThis()->GetName();
 			wndClass.hIconSm = LoadIcon(m_module, IDI_APPLICATION);
-
 			if (!WA::RegisterClassEx_(&wndClass)) {
 				WA::ThrowLastError();
 			}
@@ -434,7 +453,7 @@ public:
 				title,
 				WS_OVERLAPPEDWINDOW,
 				CW_USEDEFAULT, CW_USEDEFAULT,
-				500, 100,
+                CW_USEDEFAULT, CW_USEDEFAULT,
 				NULL,
 				NULL,
 				m_module,
@@ -477,6 +496,11 @@ private:
 				break;
 			}
 
+            case WM_DESTROY: {
+                PostQuitMessage(0);
+                return 0;
+            }
+
 			default:
 				pWnd = reinterpret_cast<Wnd*>(WA::GetWindowLongPtr_(hWnd, GWLP_USERDATA));
 				break;
@@ -501,13 +525,6 @@ public:
 
 	Window(HWND handle = nullptr) :
 		m_handle(handle) {}
-
-	~Window() {
-		if (m_handle != nullptr) {
-			auto res = DestroyWindow(m_handle);
-			assert(res);
-		}
-	}
 
 	HWND GetHandle() const {
 		return m_handle;
@@ -541,6 +558,28 @@ public:
 		}
 		return handle;
 	}
+
+    void SetWindowClientSize(int w, int h) {
+        RECT r;
+        if (!GetWindowRect(m_handle, &r)) {
+            WA::ThrowLastError();
+        }
+        SetWindowPos(r.left, r.top, w, h);
+    }
+
+    void SetWindowPos(int x, int y, int w, int h) {
+        RECT rect{x, y, x + w, y + h};
+        AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, false);
+        if (!::SetWindowPos(m_handle, nullptr,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            0))
+        {
+            WA::ThrowLastError();
+        }
+    }
 
 private:
 	HWND m_handle;
