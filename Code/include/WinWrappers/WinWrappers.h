@@ -145,7 +145,7 @@ enum class WinCommonControl {
 	//
 };
 
-WinCommonControlsGroup WinGetControlGroup(WinCommonControl control) {
+inline WinCommonControlsGroup WinGetControlGroup(WinCommonControl control) {
 #define _InternalMap($result, $a)               \
 	case WinCommonControl::$a:                  \
 		return WinCommonControlsGroup::$result; \
@@ -580,7 +580,7 @@ public:
             WA::ThrowLastError();
         }
     }
-
+    
 private:
 	HWND m_handle;
 };
