@@ -516,7 +516,6 @@ private:
 	HINSTANCE m_module;
 };
 
-
 template<
 	typename TChar,
 	template<typename> typename Derived>
