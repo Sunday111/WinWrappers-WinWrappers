@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <CommCtrl.h>
 #include <cassert>
+#include <chrono>
 #include <memory>
 
 template<typename TChar>
@@ -413,6 +414,12 @@ private:
 		INITCOMMONCONTROLSEX initInfo;
 	};
 };
+
+template<typename _Rep, typename _Period>
+void Sleep(typename std::chrono::duration<_Rep, _Period> duration) {
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+    ::Sleep(static_cast<DWORD>(ms.count()));
+}
 
 template<
 	typename TChar,
