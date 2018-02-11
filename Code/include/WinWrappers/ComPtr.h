@@ -3,11 +3,13 @@
 template<typename T>
 class ComPtr {
 public:
-    ComPtr(T* p = nullptr) :
+    explicit ComPtr(T* p = nullptr) :
         m_p(p)
     {}
 
-    ComPtr(const ComPtr&) = delete;
+    ComPtr(const ComPtr& ref) {
+        Copy<false>(ref);
+    }
 
     ComPtr(ComPtr&& that) {
         MoveFrom<false>(std::move(that));
@@ -27,6 +29,18 @@ public:
             Release<false>();
         }
         m_p = ptr;
+    }
+
+    void AddReference() {
+        if (m_p) {
+            m_p->AddRef();
+        }
+    }
+
+    template<bool release_prev>
+    void Copy(const ComPtr& ref) {
+        Set<release_prev>(ref.m_p);
+        AddReference();
     }
 
     template<bool set_to_null>
@@ -53,7 +67,10 @@ public:
         return *m_p;
     }
 
-    ComPtr& operator=(const ComPtr&) = delete;
+    ComPtr& operator=(const ComPtr& ref) {
+        Copy(ref);
+        return *this;
+    }
 
     ComPtr& operator=(ComPtr&& that) {
         MoveFrom<true>(std::move(that));
