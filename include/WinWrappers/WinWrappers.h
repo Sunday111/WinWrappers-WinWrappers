@@ -566,6 +566,21 @@ public:
 		return handle;
 	}
 
+	void GetWindowClientSize(uint32_t* w, uint32_t* h) {
+		CallAndRethrowM + [&] {
+			RECT rect;
+			if (!GetClientRect(m_handle, &rect)) {
+				WA::ThrowLastError();
+			}
+			if (w) {
+				*w = rect.right - rect.left;
+			}
+			if (h) {
+				*h = rect.bottom - rect.top;
+			}
+		};
+	}
+
     void SetWindowClientSize(int w, int h) {
         RECT r;
         if (!GetWindowRect(m_handle, &r)) {
