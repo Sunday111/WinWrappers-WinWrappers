@@ -20,6 +20,11 @@ using WndClassEx = std::conditional_t<
 	std::is_same_v<std::decay_t<TChar>, char>,
 	WNDCLASSEXA, WNDCLASSEXW>;
 
+template<typename TChar>
+using OpenFileName = std::conditional_t<
+    std::is_same_v<std::decay_t<TChar>, char>,
+    OPENFILENAMEA, OPENFILENAMEW>;
+
 #define MakeFnWrapper($name)																\
 	template<typename TChar>																\
 	struct $name##_Wrap;																	\
@@ -41,8 +46,10 @@ MakeFnWrapper(DefWindowProc)
 MakeFnWrapper(DispatchMessage)
 MakeFnWrapper(FormatMessage)
 MakeFnWrapper(GetMessage)
+MakeFnWrapper(GetOpenFileName)
 MakeFnWrapper(GetWindowLongPtr)
 MakeFnWrapper(LoadIcon)
+MakeFnWrapper(LoadLibrary)
 MakeFnWrapper(MessageBox)
 MakeFnWrapper(MessageBoxEx)
 MakeFnWrapper(PeekMessage)
@@ -301,6 +308,10 @@ public:
 		return WrappedFn(FormatMessage)(dwFlags, source, message, language, buffer, size, args);
 	}
 
+    static bool GetOpenFileName_(OpenFileName<TChar>* arg) {
+        return WrappedFn(GetOpenFileName)(arg);
+    }
+
 	static bool GetMessage_(MSG* msg, HWND hWnd, unsigned wMsgFilterMin, unsigned wMsgFilterMax) {
 		return WrappedFn(GetMessage)(msg, hWnd, wMsgFilterMin, wMsgFilterMax);
 	}
@@ -312,6 +323,10 @@ public:
 	static HICON LoadIcon_(HINSTANCE hInstance, const TChar* iconName) {
 		return WrappedFn(LoadIcon)(hInstance, iconName);
 	}
+
+    static HMODULE LoadLibrary_(const TChar* path) {
+        return WrappedFn(LoadLibrary)(path);
+    }
 
 	template<typename Input>
 	inline static const TChar* MakeIntResource_(Input value) {
