@@ -15,6 +15,11 @@ public:
         MoveFrom<false>(std::move(that));
     }
 
+    ComPtr(nullptr_t) :
+        m_p(nullptr)
+    {
+    }
+
     ~ComPtr() {
         Release<false>();
     }
@@ -75,6 +80,14 @@ public:
     ComPtr& operator=(ComPtr&& that) {
         MoveFrom<true>(std::move(that));
         return *this;
+    }
+
+    friend bool operator==(const ComPtr& a, const ComPtr& b) {
+        return a.m_p == b.m_p;
+    }
+
+    friend bool operator!=(const ComPtr& a, const ComPtr& b) {
+        return a.m_p != b.m_p;
     }
 
     T** Receive() {
