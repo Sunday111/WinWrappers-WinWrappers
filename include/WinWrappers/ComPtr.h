@@ -73,7 +73,7 @@ public:
     }
 
     ComPtr& operator=(const ComPtr& ref) {
-        Copy(ref);
+        Copy<true>(ref);
         return *this;
     }
 
