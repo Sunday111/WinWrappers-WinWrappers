@@ -581,17 +581,17 @@ public:
 		return handle;
 	}
 
-	void GetWindowClientSize(uint32_t* w, uint32_t* h) {
+	void GetWindowClientSize(size_t* w, size_t* h) {
 		CallAndRethrowM + [&] {
 			RECT rect;
 			if (!GetClientRect(m_handle, &rect)) {
 				WA::ThrowLastError();
 			}
 			if (w) {
-				*w = rect.right - rect.left;
+                *w = static_cast<size_t>(rect.right - rect.left);
 			}
 			if (h) {
-				*h = rect.bottom - rect.top;
+                *h = static_cast<size_t>(rect.bottom - rect.top);
 			}
 		};
 	}
