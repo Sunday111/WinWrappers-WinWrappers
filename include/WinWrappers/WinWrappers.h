@@ -45,6 +45,7 @@ MakeFnWrapper(CreateWindowEx)
 MakeFnWrapper(DefWindowProc)
 MakeFnWrapper(DispatchMessage)
 MakeFnWrapper(FormatMessage)
+MakeFnWrapper(GetClassInfoEx)
 MakeFnWrapper(GetMessage)
 MakeFnWrapper(GetOpenFileName)
 MakeFnWrapper(GetWindowLongPtr)
@@ -308,6 +309,10 @@ public:
 		return WrappedFn(FormatMessage)(dwFlags, source, message, language, buffer, size, args);
 	}
 
+    static bool GetClassInfoEx_(HINSTANCE hinst, const TChar* name, WndClassEx* out) {
+        return WrappedFn(GetClassInfoEx)(hinst, name, out);
+    }
+
     static bool GetOpenFileName_(OpenFileName<TChar>* arg) {
         return WrappedFn(GetOpenFileName)(arg);
     }
@@ -447,22 +452,26 @@ public:
 	WindowClass(HINSTANCE module_, HBRUSH backgroundBrush = (HBRUSH)(COLOR_WINDOW + 1)) :
 		m_module(module_) {
 		CallAndRethrow("WindowClass::WindowClass(HINSTANCE) ", [&]() {
-			typename WA::WndClassEx wndClass;
-			wndClass.cbSize = sizeof(wndClass);
-			wndClass.style = CS_HREDRAW | CS_VREDRAW;
-			wndClass.lpfnWndProc = WndProc;
-			wndClass.cbClsExtra = 0;
-			wndClass.cbWndExtra = 0;
-			wndClass.hInstance = m_module;
-			wndClass.hIcon = WA::LoadIcon_(m_module, IDI_APPLICATION);
-			wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-			wndClass.hbrBackground = backgroundBrush;
-			wndClass.lpszMenuName = NULL;
-			wndClass.lpszClassName = CastThis()->GetName();
-			wndClass.hIconSm = LoadIcon(m_module, IDI_APPLICATION);
-			if (!WA::RegisterClassEx_(&wndClass)) {
-				WA::ThrowLastError();
-			}
+            auto className = CastThis()->GetName();
+            typename WA::WndClassEx wndClass;
+            if (!WA::GetClassInfoEx_(module_, className, &wndClass)) {
+
+                wndClass.cbSize = sizeof(wndClass);
+                wndClass.style = CS_HREDRAW | CS_VREDRAW;
+                wndClass.lpfnWndProc = WndProc;
+                wndClass.cbClsExtra = 0;
+                wndClass.cbWndExtra = 0;
+                wndClass.hInstance = m_module;
+                wndClass.hIcon = WA::LoadIcon_(m_module, IDI_APPLICATION);
+                wndClass.hCursor = LoadCursor(NULL, IDC_ARROW);
+                wndClass.hbrBackground = backgroundBrush;
+                wndClass.lpszMenuName = NULL;
+                wndClass.lpszClassName = className;
+                wndClass.hIconSm = LoadIcon(m_module, IDI_APPLICATION);
+                if (!WA::RegisterClassEx_(&wndClass)) {
+                    WA::ThrowLastError();
+                }
+            }
 		});
 	}
 
